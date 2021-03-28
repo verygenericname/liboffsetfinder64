@@ -23,6 +23,7 @@ using namespace tihmstar::libinsn;
 #define DEBUG_ENABLED_DTRE_VAR_STR "debug-enabled"
 #define DEFAULT_BOOTARGS_STR "rd=md0 nand-enable-reformat=1 -progress"
 #define DEFAULT_BOOTARGS_STR_13 "rd=md0 -progress -restore"
+#define DEFAULT_BOOTARGS_STR_OTHER " rd=md0"
 #define CERT_STR "Apple Inc.1"
 
 ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
@@ -52,6 +53,14 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     debug("iBoot base at=0x%016llx\n", _base);
     _vmem = new vmem({{_buf,_bufSize,_base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE | vsegment::vmprot::kVMPROTEXEC}});
     retassure(_vers = atoi((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
+    std::string _vers_str = std::string((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]);
+    for(int i = 0; i < 5; i++) {
+        std::size_t pos = _vers_str.find('.');
+        if(pos != std::string::npos) {
+            _vers_str = _vers_str.substr(pos + 1, _vers_str.size() - 1);
+            _vers_arr[i] = atoi((char*)_vers_str.c_str());
+        }
+    }
     debug("iBoot-%d inputted\n", _vers);
     
     didConstructSuccessfully = true;
@@ -71,6 +80,14 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
     debug("iBoot base at=0x%016llx\n", _base);
     _vmem = new vmem({{_buf,_bufSize,_base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE | vsegment::vmprot::kVMPROTEXEC}});
     retassure(_vers = atoi((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
+    std::string _vers_str = std::string((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]);
+    for(int i = 0; i < 5; i++) {
+        std::size_t pos = _vers_str.find('.');
+        if(pos != std::string::npos) {
+            _vers_str = _vers_str.substr(pos + 1, _vers_str.size() - 1);
+            _vers_arr[i] = atoi((char*)_vers_str.c_str());
+        }
+    }
     debug("iBoot-%d inputted\n", _vers);
 }
 
@@ -96,21 +113,46 @@ bool ibootpatchfinder64_base::has_recovery_console(){
 
 std::vector<patch> ibootpatchfinder64_base::get_sigcheck_patch(){
     std::vector<patch> patches;
-    loc_t img4str = findstr("IMG4", true);
-    debug("img4str=%p\n",img4str);
+    loc_t img4decodemanifestexists = 0x0;
+    bool isnotptr = false;
+    if(_vers == 5540 && _vers_arr[0] >= 100 || _vers >= 5540) {
+        debug("get_sigcheck_patch: iOS 13.4 or later(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
+        img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\xE8\x00\x00\xB4", 12);
+    } else if(_vers == 5540 && _vers_arr[0] <= 100 || _vers <= 5540 && _vers > 2817) {
+        debug("get_sigcheck_patch: iOS 13.3 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
+        img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xE0\x07\x1F\x32\xE8\x00\x00\xB4", 12);
+    } else if(_vers <= 2817) {
+        debug("get_sigcheck_patch: iOS 9.3.5 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
+        isnotptr = true;
+        img4decodemanifestexists = _vmem->memmem("\xE8\x07\x1F\x32\xE0\x00\x00\xB4\xC1\x00\x00\xB4", 12);
+    } else {
+        reterror("unknown or unsupported iboot version");
+    }
+    debug("img4decodemanifestexists=%p",img4decodemanifestexists);
+    assure(img4decodemanifestexists);
 
-    loc_t img4strref = find_literal_ref(img4str);
-    debug("img4strref=%p\n",img4strref);
+    loc_t img4decodemanifestexistsref = find_call_ref(img4decodemanifestexists);
+    debug("img4decodemanifestexistsref=%p",img4decodemanifestexistsref);
+    assure(img4decodemanifestexistsref);
 
-    loc_t f1top = find_bof(img4strref);
-    debug("f1top=%p\n",f1top);
+    vmem iter(*_vmem,img4decodemanifestexistsref);
+    vmem iter2(*_vmem,img4decodemanifestexistsref);
 
-    loc_t f1topref = find_call_ref(f1top,1);
-    debug("f1topref=%p\n",f1topref);
+    while(++iter != insn::adr);
+    if((uint8_t)iter().rd() != 2) {
+        while(++iter2 != insn::adr);
+        assure((uint8_t)iter().rd() == 2);
+    }
+    loc_t img4interposercallbackptr = iter().imm();
+    debug("img4interposercallbackptr=%p",img4interposercallbackptr);
+    assure(img4interposercallbackptr);
 
-    loc_t f2top = find_bof(f1topref);
-    debug("f2top=%p\n",f2top);
-    
+    loc_t img4interposercallback = (isnotptr == true) ? img4interposercallbackptr : _vmem->deref(img4interposercallbackptr);
+    debug("img4interposercallback=%p",img4interposercallback);
+    assure(img4interposercallback);
+
+    patches.push_back({img4interposercallback,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
+    patches.push_back({img4interposercallback + 4,"\xC0\x03\x5F\xD6" /*ret*/,4});
     {
         /* always production patch*/
         for (uint64_t demoteReg : {0x3F500000UL,0x3F500000UL,0x3F500000UL,0x481BC000UL,0x481BC000UL,0x20E02A000UL,0x2102BC000UL,0x2102BC000UL,0x2352BC000UL}) {
@@ -126,43 +168,6 @@ std::vector<patch> ibootpatchfinder64_base::get_sigcheck_patch(){
             }
         }
     }
-
-    vmem iter(*_vmem,f2top);
-
-    loc_t adr_x3 = 0;
-    loc_t adr_x2 = 0;
-
-    while (true) {
-        if (++iter == insn::adr && iter().rd() == 2){
-            adr_x2 = iter;
-        }else if (iter() == insn::adr && iter().rd() == 3){
-            adr_x3 = iter;
-        }else if (iter() == insn::bl){
-            if (adr_x2 && adr_x3) {
-                break;
-            }else{
-                adr_x2 = 0;
-                adr_x3 = 0;
-            }
-        }
-    }
-    
-    assure(adr_x2);
-    iter = adr_x2;
-    
-    loc_t callback = (loc_t)_vmem->deref((loc_t)iter().imm());
-    debug("callback=%p\n",callback);
-
-    iter = callback;
-    
-    while (++iter != insn::ret);
-    
-    loc_t ret = iter;
-    debug("ret=%p\n",ret);
-
-    const char p[] ="\x00\x00\x80\xD2" /*mov x0,0*/ "\xC0\x03\x5F\xD6" /*ret*/;
-    patches.push_back({ret,p,sizeof(p)-1});
-    
     return patches;
 }
 
@@ -174,8 +179,13 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     try{
         default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR);
     }catch(...){
-        debug("DEFAULT_BOOTARGS_STR not found, trying fallback to DEFAULT_BOOTARGS_STR_13\n");
-        default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR_13);
+        try{
+            debug("DEFAULT_BOOTARGS_STR not found, trying fallback to DEFAULT_BOOTARGS_STR_13\n");
+            default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR_13);
+        }catch(...){
+            debug("DEFAULT_BOOTARGS_STR_13 not found, trying fallback to DEFAULT_BOOTARGS_STR_OTHER\n");
+            default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER);
+        }
     }
 
     assure(default_boot_args_str_loc);
@@ -214,6 +224,8 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     vmem iter(*_vmem,default_boot_args_xref);
     uint8_t xrefRD = iter().rd();
     debug("xrefRD=%d\n",xrefRD);
+    if(xrefRD > 9)
+        return patches;
 
     
     while (++iter != insn::csel);
@@ -573,7 +585,7 @@ std::vector<patch> ibootpatchfinder64_base::get_freshnonce_patch(){
 
     vmem iter(*_vmem,noncefun2_blref);
     
-    assure((--iter).supertype() == insn::sut_branch_imm);
+    while((--iter).supertype() != insn::sut_branch_imm);
 
     loc_t branchloc = iter;
     debug("branchloc=%p\n",branchloc);

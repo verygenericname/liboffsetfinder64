@@ -14,6 +14,7 @@ using namespace tihmstar::offsetfinder64;
 using namespace tihmstar::libinsn;
 
 #define iBOOT_BASE_OFFSET 0x300
+#define PROD "effective-production-status-ap"
 
 ibootpatchfinder64_iOS14::ibootpatchfinder64_iOS14(const char *filename)
     : ibootpatchfinder64_base(filename)
@@ -31,85 +32,64 @@ ibootpatchfinder64_iOS14::ibootpatchfinder64_iOS14(const void *buffer, size_t bu
     debug("iBoot base at=0x%016llx\n", _base);
 }
 
-
 std::vector<patch> ibootpatchfinder64_iOS14::get_sigcheck_patch(){
     std::vector<patch> patches;
-    loc_t findpos = 0;
-    vmem iter(*_vmem);
-    
-    /* We are looking for this:
-     0x00000001800312dc         cmp        w8, #0x1
-     0x00000001800312e0         b.ne       loc_1800313d8
+    loc_t img4decodemanifestexists = img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\xE8\x00\x00\xB4", 12); //0x180032144;
+    debug("img4decodemanifestexists=%p",img4decodemanifestexists);
+    assure(img4decodemanifestexists);
 
-     0x00000001800312e4         ldr        x8, [x19, #0x10]
-     0x00000001800312e8         cmp        x8, #0x4
-     0x00000001800312ec         b.eq       loc_180031388
+    loc_t img4decodemanifestexistsref = find_call_ref(img4decodemanifestexists);
+    debug("img4decodemanifestexistsref=%p",img4decodemanifestexistsref);
+    assure(img4decodemanifestexistsref);
 
-     0x00000001800312f0         cmp        x8, #0x2
-     0x00000001800312f4         b.eq       loc_180031344
+    vmem iter(*_vmem,img4decodemanifestexistsref);
+    vmem iter2(*_vmem,img4decodemanifestexistsref);
 
-     0x00000001800312f8         cmp        x8, #0x1
-     0x00000001800312fc         b.ne       loc_180031a88
-     */
-    
-    while (!findpos) {
-        if (++iter != insn::cmp) continue;
-        
-        if (iter().imm() != 1) continue;
-        
-        if ((++iter).supertype() != insn::sut_branch_imm) continue;
-
-        if (++iter != insn::ldr || iter().imm() != 0x10) continue;
-
-        if (++iter != insn::cmp || iter().imm() != 4) continue;
-        if ((++iter).supertype() != insn::sut_branch_imm) continue;
-
-        if (++iter != insn::cmp || iter().imm() != 2) continue;
-        if ((++iter).supertype() != insn::sut_branch_imm) continue;
-
-        if (++iter != insn::cmp || iter().imm() != 1) continue;
-        if ((++iter).supertype() != insn::sut_branch_imm) continue;
-
-        
-        findpos = iter;
+    while(++iter != insn::adr);
+    if((uint8_t)iter().rd() != 2) {
+        while(++iter2 != insn::adr);
+        assure((uint8_t)iter().rd() == 2);
     }
-    debug("findpos=%p",findpos);
+    loc_t img4interposercallbackptr = iter().imm();
+    debug("img4interposercallbackptr=%p",img4interposercallbackptr);
+    assure(img4interposercallbackptr);
 
-    
-    while (++iter != insn::ret);
-    
-    loc_t funcend = iter;
-    debug("funcend=%p",funcend);
+    loc_t img4interposercallback = _vmem->deref(img4interposercallbackptr);
+    debug("img4interposercallback=%p",img4interposercallback);
+    assure(img4interposercallback);
 
-    {
-        insn pins = insn::new_immediate_movz(funcend, 0, 0, 0);
-        uint32_t opcode = pins.opcode();
-        patches.push_back({(loc_t)pins.pc(), &opcode, 4});
-    }
-
-    {
-        insn pins = insn::new_general_ret(funcend+4);
-        uint32_t opcode = pins.opcode();
-        patches.push_back({(loc_t)pins.pc(), &opcode, 4});
-    }
-
-    
+    patches.push_back({img4interposercallback,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
+    patches.push_back({img4interposercallback + 4,"\xC0\x03\x5F\xD6" /*ret*/,4});
     {
         /* always production patch*/
-        for (uint64_t demoteReg : {0x3F500000UL,0x3F500000UL,0x3F500000UL,0x481BC000UL,0x481BC000UL,0x20E02A000UL,0x2102BC000UL,0x2102BC000UL,0x2352BC000UL}) {
-            loc_t demoteRef = find_literal_ref(demoteReg);
-            if (demoteRef) {
-                vmem iter(*_vmem,demoteRef);
-
-                while (++iter != insn::and_);
-                assure((uint32_t)iter().imm() == 1);
+        loc_t productionStr = _vmem->memstr(PROD);
+        debug("productionStr=%p\n",productionStr);
+        assure(productionStr);
+        loc_t productionRef = find_literal_ref(productionStr);
+        debug("productionRef=%p\n",productionRef);
+        assure(productionRef);
+        vmem iter(*_vmem,productionRef);
+        while (++iter != insn::bl);
+        ++iter;
+        while (++iter != insn::bl);
+        iter = iter().imm();
+        while (++iter != insn::bl);
+        loc_t demoteRef = iter().imm();
+        if (demoteRef) {
+            iter = demoteRef;
+            while (++iter != insn::b);
+            iter = iter().imm();
+            assure((uint32_t)iter().imm() == 1 || (uint32_t)iter().imm() == 0x100);
+            demoteRef = iter;
+            debug("demoteRef=%p\n",demoteRef);
+            patches.push_back({demoteRef,"\x20\x00\x80\xD2" /*mov x0, 0*/,4});
+            if(++iter != insn::ret) {
                 demoteRef = iter;
-                debug("demoteRef=%p\n",demoteRef);
-                patches.push_back({demoteRef,"\x20\x00\x80\xD2" /*mov x0, 0*/,4});
+                debug("demoteRef2=%p\n",demoteRef);
+                patches.push_back({demoteRef,"\xD5\x03\x20\x1F" /*nop*/,4});
             }
         }
     }
-    
     return patches;
 }
 

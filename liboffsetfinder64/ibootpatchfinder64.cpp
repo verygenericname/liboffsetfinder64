@@ -59,6 +59,7 @@ ibootpatchfinder64 *ibootpatchfinder64::make_ibootpatchfinder64(const char * fil
 ibootpatchfinder64 *ibootpatchfinder64::make_ibootpatchfinder64(const void *buffer, size_t bufSize, bool takeOwnership){
     uint8_t *buf = NULL;
     uint32_t vers = 0;
+    uint32_t vers_arr[5];
 
     buf = (uint8_t*)buffer;
     assure(bufSize > 0x1000);
@@ -67,6 +68,14 @@ ibootpatchfinder64 *ibootpatchfinder64::make_ibootpatchfinder64(const void *buff
     retassure(*(uint32_t*)&buf[0] == 0x90000000, "invalid magic");
 
     retassure(vers = atoi((char*)&buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
+    std::string vers_str = std::string((char*)&buf[IBOOT_VERS_STR_OFFSET+6]);
+    for(int i = 0; i < 5; i++) {
+        std::size_t pos = vers_str.find('.');
+        if(pos != std::string::npos) {
+            vers_str = vers_str.substr(pos + 1, vers_str.size() - 1);
+            vers_arr[i] = atoi((char*)vers_str.c_str());
+        }
+    }
     debug("iBoot-%d inputted\n", vers);
 
     if (vers >= 6671) {

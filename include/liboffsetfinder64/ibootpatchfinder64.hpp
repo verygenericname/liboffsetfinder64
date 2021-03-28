@@ -24,6 +24,7 @@ namespace tihmstar {
         class ibootpatchfinder64 : public patchfinder64{
         protected:
             uint32_t _vers;
+            uint32_t _vers_arr[5];
             
             ibootpatchfinder64(bool freeBuf);
         public:
