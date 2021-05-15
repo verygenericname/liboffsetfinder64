@@ -60,34 +60,41 @@ std::vector<patch> ibootpatchfinder64_iOS14::get_sigcheck_patch(){
 
     patches.push_back({img4interposercallback,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
     patches.push_back({img4interposercallback + 4,"\xC0\x03\x5F\xD6" /*ret*/,4});
-    {
-        /* always production patch*/
-        loc_t productionStr = _vmem->memstr(PROD);
-        debug("productionStr=%p\n",productionStr);
-        assure(productionStr);
-        loc_t productionRef = find_literal_ref(productionStr);
-        debug("productionRef=%p\n",productionRef);
-        assure(productionRef);
-        vmem iter(*_vmem,productionRef);
-        while (++iter != insn::bl);
-        ++iter;
-        while (++iter != insn::bl);
+    return patches;
+}
+
+std::vector<patch> ibootpatchfinder64_iOS14::get_demotion_patch(){
+    std::vector<patch> patches;
+    /* always production patch*/
+    debug("prod search");
+    if(!_vmem->memstr(PROD))
+        return patches;
+    loc_t productionStr = _vmem->memstr(PROD);
+    debug("prod done");
+    debug("productionStr=%p\n",productionStr);
+    assure(productionStr);
+    loc_t productionRef = find_literal_ref(productionStr);
+    debug("productionRef=%p\n",productionRef);
+    assure(productionRef);
+    vmem iter(*_vmem,productionRef);
+    while (++iter != insn::bl);
+    ++iter;
+    while (++iter != insn::bl);
+    iter = iter().imm();
+    while (++iter != insn::bl);
+    loc_t demoteRef = iter().imm();
+    if (demoteRef) {
+        iter = demoteRef;
+        while (++iter != insn::b);
         iter = iter().imm();
-        while (++iter != insn::bl);
-        loc_t demoteRef = iter().imm();
-        if (demoteRef) {
-            iter = demoteRef;
-            while (++iter != insn::b);
-            iter = iter().imm();
-            assure((uint32_t)iter().imm() == 1 || (uint32_t)iter().imm() == 0x100);
+        assure((uint32_t)iter().imm() == 1 || (uint32_t)iter().imm() == 0x100);
+        demoteRef = iter;
+        debug("demoteRef=%p\n",demoteRef);
+        patches.push_back({demoteRef,"\x20\x00\x80\xD2" /*mov x0, 0*/,4});
+        if(++iter != insn::ret) {
             demoteRef = iter;
-            debug("demoteRef=%p\n",demoteRef);
-            patches.push_back({demoteRef,"\x20\x00\x80\xD2" /*mov x0, 0*/,4});
-            if(++iter != insn::ret) {
-                demoteRef = iter;
-                debug("demoteRef2=%p\n",demoteRef);
-                patches.push_back({demoteRef,"\xD5\x03\x20\x1F" /*nop*/,4});
-            }
+            debug("demoteRef2=%p\n",demoteRef);
+            patches.push_back({demoteRef,"\xD5\x03\x20\x1F" /*nop*/,4});
         }
     }
     return patches;

@@ -44,6 +44,11 @@ namespace tihmstar {
             virtual std::vector<patch> get_sigcheck_patch();
 
             /*
+                demotion image patch
+             */
+            virtual std::vector<patch> get_demotion_patch();
+
+            /*
                make kernel boot with these bootargs
              */
             virtual std::vector<patch> get_boot_arg_patch(const char *bootargs);

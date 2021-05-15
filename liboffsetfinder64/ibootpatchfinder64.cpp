@@ -102,6 +102,10 @@ std::vector<patch> ibootpatchfinder64::get_sigcheck_patch(){
     reterror("not implemented by provider");
 }
 
+std::vector<patch> ibootpatchfinder64::get_demotion_patch(){
+    reterror("not implemented by provider");
+}
+
 std::vector<patch> ibootpatchfinder64::get_boot_arg_patch(const char *bootargs){
     reterror("not implemented by provider");
 }

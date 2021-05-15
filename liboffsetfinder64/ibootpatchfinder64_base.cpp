@@ -25,6 +25,7 @@ using namespace tihmstar::libinsn;
 #define DEFAULT_BOOTARGS_STR_13 "rd=md0 -progress -restore"
 #define DEFAULT_BOOTARGS_STR_OTHER " rd=md0"
 #define CERT_STR "Apple Inc.1"
+#define _270ZEROES "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
 ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     ibootpatchfinder64(true)
@@ -118,10 +119,10 @@ std::vector<patch> ibootpatchfinder64_base::get_sigcheck_patch(){
     if(_vers == 5540 && _vers_arr[0] >= 100 || _vers >= 5540) {
         debug("get_sigcheck_patch: iOS 13.4 or later(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
         img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\xE8\x00\x00\xB4", 12);
-    } else if(_vers == 5540 && _vers_arr[0] <= 100 || _vers <= 5540 && _vers > 2817) {
+    } else if(_vers == 5540 && _vers_arr[0] <= 100 || _vers <= 5540 && _vers > 3406) {
         debug("get_sigcheck_patch: iOS 13.3 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
         img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xE0\x07\x1F\x32\xE8\x00\x00\xB4", 12);
-    } else if(_vers <= 2817) {
+    } else if(_vers <= 3406) {
         debug("get_sigcheck_patch: iOS 9.3.5 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
         isnotptr = true;
         img4decodemanifestexists = _vmem->memmem("\xE8\x07\x1F\x32\xE0\x00\x00\xB4\xC1\x00\x00\xB4", 12);
@@ -153,38 +154,44 @@ std::vector<patch> ibootpatchfinder64_base::get_sigcheck_patch(){
 
     patches.push_back({img4interposercallback,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
     patches.push_back({img4interposercallback + 4,"\xC0\x03\x5F\xD6" /*ret*/,4});
-    {
-        /* always production patch*/
-        for (uint64_t demoteReg : {0x3F500000UL,0x3F500000UL,0x3F500000UL,0x481BC000UL,0x481BC000UL,0x20E02A000UL,0x2102BC000UL,0x2102BC000UL,0x2352BC000UL}) {
-            loc_t demoteRef = find_literal_ref(demoteReg);
-            if (demoteRef) {
-                vmem iter(*_vmem,demoteRef);
+    return patches;
+}
 
-                while (++iter != insn::and_);
-                assure((uint32_t)iter().imm() == 1);
-                demoteRef = iter;
-                debug("demoteRef=%p\n",demoteRef);
-                patches.push_back({demoteRef,"\x20\x00\x80\xD2" /*mov x0, 0*/,4});
-            }
+std::vector<patch> ibootpatchfinder64_base::get_demotion_patch(){
+    std::vector<patch> patches;
+    /* always production patch*/
+    for (uint64_t demoteReg : {0x3F500000UL,0x3F500000UL,0x3F500000UL,0x481BC000UL,0x481BC000UL,0x20E02A000UL,0x2102BC000UL,0x2102BC000UL,0x2352BC000UL}) {
+        loc_t demoteRef = find_literal_ref(demoteReg);
+        if (demoteRef) {
+            vmem iter(*_vmem,demoteRef);
+
+            while (++iter != insn::and_);
+            assure((uint32_t)iter().imm() == 1);
+            demoteRef = iter;
+            debug("demoteRef=%p\n",demoteRef);
+            patches.push_back({demoteRef,"\x20\x00\x80\xD2" /*mov x0, 0*/,4});
         }
     }
     return patches;
 }
-
 std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *bootargs){
     std::vector<patch> patches;
     loc_t default_boot_args_str_loc = 0;
     loc_t default_boot_args_xref = 0;
+    int default_boot_args_len = 0;
 
     try{
         default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR);
+        default_boot_args_len = strlen(DEFAULT_BOOTARGS_STR);
     }catch(...){
         try{
             debug("DEFAULT_BOOTARGS_STR not found, trying fallback to DEFAULT_BOOTARGS_STR_13\n");
             default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR_13);
+            default_boot_args_len = strlen(DEFAULT_BOOTARGS_STR_13);
         }catch(...){
             debug("DEFAULT_BOOTARGS_STR_13 not found, trying fallback to DEFAULT_BOOTARGS_STR_OTHER\n");
             default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER);
+            default_boot_args_len = strlen(DEFAULT_BOOTARGS_STR_OTHER);
         }
     }
 
@@ -194,19 +201,43 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     assure(default_boot_args_xref = find_literal_ref(default_boot_args_str_loc));
     debug("default_boot_args_xref=%p\n",default_boot_args_xref);
 
-    if (strlen(bootargs) > strlen(DEFAULT_BOOTARGS_STR)) {
-        loc_t cert_str_loc = 0;
+    if (strlen(bootargs) > default_boot_args_len) {
         debug("Relocating boot-args string...\n");
+        loc_t cert_str_loc = 0;
+        loc_t bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, default_boot_args_xref);
+        debug("bootarg_loc1: %p\n", bootarg_loc1);
+        if(bootarg_loc1) {
+            loc_t bootarg_loc = bootarg_loc1 + 0x11;
+            debug("bootarg_loc: %p\n", bootarg_loc);
+            vmem iter(*_vmem,bootarg_loc);
+            while(true) {
+                if(iter().opcode() == 0x00000000) {
+                    ++iter;
+                    if(iter().opcode() == 0x00000000) {
+                        --iter;
+                        break;
+                    }
+                    else
+                        --iter;
+                }
+                ++iter;
+            }
 
-        /* Find the "Reliance on this cert..." string. */
-        retassure(cert_str_loc = _vmem->memstr(CERT_STR), "Unable to find \"%s\" string!\n", CERT_STR);
+            debug("Pointing default boot-args xref to %p...\n", iter().pc() - 1);
 
-        debug("\"%s\" string found at %p\n", CERT_STR, cert_str_loc);
+            default_boot_args_str_loc = iter().pc() - 1;
+        } else {
+            /* Find the "Reliance on this cert..." string. */
+            retassure(cert_str_loc = _vmem->memstr(CERT_STR), "Unable to find \"%s\" string!\n", CERT_STR);
 
-        /* Point the boot-args xref to the "Reliance on this cert..." string. */
-        debug("Pointing default boot-args xref to %p...\n", cert_str_loc);
+            debug("\"%s\" string found at %p\n", CERT_STR, cert_str_loc);
 
-        default_boot_args_str_loc = cert_str_loc;
+            /* Point the boot-args xref to the "Reliance on this cert..." string. */
+            debug("Pointing default boot-args xref to %p...\n", cert_str_loc);
+
+            default_boot_args_str_loc = cert_str_loc;
+        }
+
         
         vmem iter(*_vmem,default_boot_args_xref);
         
