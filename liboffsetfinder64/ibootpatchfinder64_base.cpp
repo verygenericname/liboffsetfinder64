@@ -23,7 +23,9 @@ using namespace tihmstar::libinsn;
 #define DEBUG_ENABLED_DTRE_VAR_STR "debug-enabled"
 #define DEFAULT_BOOTARGS_STR "rd=md0 nand-enable-reformat=1 -progress"
 #define DEFAULT_BOOTARGS_STR_13 "rd=md0 -progress -restore"
-#define DEFAULT_BOOTARGS_STR_OTHER " rd=md0"
+#define DEFAULT_BOOTARGS_STR_OTHER "rd=md0"
+#define DEFAULT_BOOTARGS_STR_OTHER1 " -progress"
+#define DEFAULT_BOOTARGS_STR_OTHER2 " -restore"
 #define CERT_STR "Apple Inc.1"
 #define _270ZEROES "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
@@ -179,6 +181,7 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     loc_t default_boot_args_str_loc = 0;
     loc_t default_boot_args_xref = 0;
     int default_boot_args_len = 0;
+    bool _6723_100 = (_vers >= 6723 && _vers_arr[0] >= 100);
 
     try{
         default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR);
@@ -198,8 +201,23 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     assure(default_boot_args_str_loc);
     debug("default_boot_args_str_loc=%p\n",default_boot_args_str_loc);
    
-    assure(default_boot_args_xref = find_literal_ref(default_boot_args_str_loc));
-    debug("default_boot_args_xref=%p\n",default_boot_args_xref);
+
+    if(_6723_100) {
+        loc_t adr1 = 0;
+        assure(adr1 = find_literal_ref(default_boot_args_str_loc));
+        debug("adr1=%p\n",adr1);
+        vmem iter(*_vmem,adr1);
+        while(++iter != insn::nop) continue;
+        while(++iter != insn::nop) continue;
+        while(++iter != insn::nop) continue;
+        while(++iter != insn::nop) continue;
+        while(++iter != insn::nop) continue;
+        debug("iter: %p\n",iter().pc());
+        default_boot_args_xref = iter;
+    } else {
+        assure(default_boot_args_xref = find_literal_ref(default_boot_args_str_loc));
+        debug("default_boot_args_xref=%p\n",default_boot_args_xref);
+    }
 
     if (strlen(bootargs) > default_boot_args_len) {
         debug("Relocating boot-args string...\n");
@@ -240,10 +258,18 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
 
         
         vmem iter(*_vmem,default_boot_args_xref);
-        
-        assure(iter() == insn::adr);
 
-        insn pins = insn::new_general_adr(default_boot_args_xref, (int64_t)default_boot_args_str_loc, iter().rd());
+        uint8_t _reg = 0;
+
+        if(_6723_100) {
+            assure(iter() == insn::nop);
+            _reg = 24;
+        } else {
+            assure(iter() == insn::adr);
+            _reg = iter().rd();
+        }
+
+        insn pins = insn::new_general_adr(default_boot_args_xref, (int64_t)default_boot_args_str_loc, _reg);
         
         uint32_t opcode = pins.opcode();
         patches.push_back({(loc_t)pins.pc(), &opcode, 4});
@@ -252,12 +278,17 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     debug("Applying custom boot-args \"%s\"\n", bootargs);
     patches.push_back({default_boot_args_str_loc, bootargs, strlen(bootargs)+1});
     
-    vmem iter(*_vmem,default_boot_args_xref);
-    uint8_t xrefRD = iter().rd();
-    debug("xrefRD=%d\n",xrefRD);
-    if(xrefRD > 9)
-        return patches;
 
+    vmem iter(*_vmem,default_boot_args_xref);
+    uint8_t xrefRD = 0;
+    if(_6723_100) {
+        xrefRD = 4;
+    } else {
+        xrefRD = iter().rd();
+    }
+    debug("xrefRD=%d\n",xrefRD);
+    if(xrefRD > 9 || xrefRD == 4)
+        return patches;
     
     while (++iter != insn::csel);
     
