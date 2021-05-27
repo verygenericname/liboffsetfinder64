@@ -263,7 +263,15 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
 
         if(_6723_100) {
             assure(iter() == insn::nop);
-            _reg = 24;
+            loc_t adr2 = 0;
+            retassure(adr2 = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER2), "Unable to find \"%s\" string!\n", DEFAULT_BOOTARGS_STR_OTHER2);
+            loc_t adr2_xref = 0;
+            retassure(adr2_xref = find_literal_ref(adr2), "Unable to find \"%s\" xref for string!\n", DEFAULT_BOOTARGS_STR_OTHER2); 
+            vmem iter(*_vmem,adr2_xref);
+            while(--iter != insn::sub) continue;
+            assure(iter() == insn::sub);
+            assure(iter().rd());
+            _reg = iter().rd();
         } else {
             assure(iter() == insn::adr);
             _reg = iter().rd();
