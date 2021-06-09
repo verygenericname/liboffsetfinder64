@@ -118,14 +118,20 @@ std::vector<patch> ibootpatchfinder64_base::get_sigcheck_patch(){
     std::vector<patch> patches;
     loc_t img4decodemanifestexists = 0x0;
     bool isnotptr = false;
+    bool isadrl = false;
     if(_vers == 5540 && _vers_arr[0] >= 100 || _vers >= 5540) {
         debug("get_sigcheck_patch: iOS 13.4 or later(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
         img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\xE8\x00\x00\xB4", 12);
     } else if(_vers == 5540 && _vers_arr[0] <= 100 || _vers <= 5540 && _vers > 3406) {
         debug("get_sigcheck_patch: iOS 13.3 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
         img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xE0\x07\x1F\x32\xE8\x00\x00\xB4", 12);
-    } else if(_vers <= 3406) {
-        debug("get_sigcheck_patch: iOS 9.3.5 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
+    } else if(_vers < 3406) {
+        if(_vers <= 1940) {
+            debug("get_sigcheck_patch: iOS 7.1.2 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
+            isadrl = true;
+        } else {
+            debug("get_sigcheck_patch: iOS 9.3.6 or lower(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
+        }
         isnotptr = true;
         img4decodemanifestexists = _vmem->memmem("\xE8\x07\x1F\x32\xE0\x00\x00\xB4\xC1\x00\x00\xB4", 12);
     } else {
@@ -141,10 +147,19 @@ std::vector<patch> ibootpatchfinder64_base::get_sigcheck_patch(){
     vmem iter(*_vmem,img4decodemanifestexistsref);
     vmem iter2(*_vmem,img4decodemanifestexistsref);
 
-    while(++iter != insn::adr);
-    if((uint8_t)iter().rd() != 2) {
-        while(++iter2 != insn::adr);
-        assure((uint8_t)iter().rd() == 2);
+    if(isadrl) {
+        while(++iter != insn::ldr);
+        ++iter;
+        if((uint8_t)iter().rd() != 2) {
+            while(++iter2 != insn::ldr);
+            assure((uint8_t)iter().rd() == 2);
+        }
+    } else {
+        while(++iter != insn::adr);
+        if((uint8_t)iter().rd() != 2) {
+            while(++iter2 != insn::adr);
+            assure((uint8_t)iter().rd() == 2);
+        }
     }
     loc_t img4interposercallbackptr = iter().imm();
     debug("img4interposercallbackptr=%p",img4interposercallbackptr);
@@ -273,8 +288,16 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
             assure(iter().rd());
             _reg = iter().rd();
         } else {
-            assure(iter() == insn::adr);
-            _reg = iter().rd();
+            if(iter() != insn::adr) {
+               --iter;
+               --iter;
+               assure(iter() == insn::bl);
+               ++iter;
+               _reg = iter().rd();
+            } else {
+               assure(iter() == insn::adr);
+                _reg = iter().rd();
+            }
         }
 
         insn pins = insn::new_general_adr(default_boot_args_xref, (int64_t)default_boot_args_str_loc, _reg);
