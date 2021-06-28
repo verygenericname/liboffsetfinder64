@@ -193,6 +193,8 @@ std::vector<patch> ibootpatchfinder64_base::get_demotion_patch(){
 }
 std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *bootargs){
     std::vector<patch> patches;
+    if(!bootargs)
+        return patches;
     loc_t default_boot_args_str_loc = 0;
     loc_t default_boot_args_xref = 0;
     int default_boot_args_len = 0;
