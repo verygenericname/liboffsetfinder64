@@ -25,6 +25,7 @@ namespace tihmstar {
         protected:
             uint32_t _vers;
             uint32_t _vers_arr[5];
+            bool stage1 = false;
             
             ibootpatchfinder64(bool freeBuf);
         public:

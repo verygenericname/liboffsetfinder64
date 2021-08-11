@@ -16,6 +16,7 @@ using namespace std;
 using namespace tihmstar::offsetfinder64;
 using namespace tihmstar::libinsn;
 
+#define IBOOT_STAGE_STR_OFFSET 0x200
 #define IBOOT_VERS_STR_OFFSET 0x280
 #define iBOOT_BASE_OFFSET 0x318
 #define iBOOT_14_BASE_OFFSET 0x300
@@ -60,11 +61,13 @@ ibootpatchfinder64 *ibootpatchfinder64::make_ibootpatchfinder64(const void *buff
     uint8_t *buf = NULL;
     uint32_t vers = 0;
     uint32_t vers_arr[5];
+    bool stage1 = false;
 
     buf = (uint8_t*)buffer;
     assure(bufSize > 0x1000);
     
     assure(!strncmp((char*)&buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
+    stage1 = !strncmp((char*)&buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
     retassure(*(uint32_t*)&buf[0] == 0x90000000, "invalid magic");
 
     retassure(vers = atoi((char*)&buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");

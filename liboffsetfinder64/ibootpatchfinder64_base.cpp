@@ -16,6 +16,7 @@ using namespace std;
 using namespace tihmstar::offsetfinder64;
 using namespace tihmstar::libinsn;
 
+#define IBOOT_STAGE_STR_OFFSET 0x200
 #define IBOOT_VERS_STR_OFFSET 0x280
 #define iBOOT_BASE_OFFSET 0x318
 #define KERNELCACHE_PREP_STRING "__PAGEZERO"
@@ -50,6 +51,7 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     assure(_bufSize > 0x1000);
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
+    stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
     retassure(*(uint32_t*)&_buf[0] == 0x90000000 || *(uint32_t*)&_buf[4] == 0x90000000, "invalid magic");
     
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
@@ -77,6 +79,7 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
     assure(_bufSize > 0x1000);
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
+    stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
     retassure(*(uint32_t*)&_buf[0] == 0x90000000, "invalid magic");
     
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
@@ -548,6 +551,13 @@ std::vector<patch> ibootpatchfinder64_base::get_ra1nra1n_patch(){
 std::vector<patch> ibootpatchfinder64_base::get_unlock_nvram_patch(){
     std::vector<patch> patches;
 
+    debug("check stage");
+    if(stage1) {
+        debug("iBootStage1 detected, not patching nvram");
+        return patches;
+    }
+    debug("stage not iBootStage1, continuing patch");
+
     loc_t debug_uarts_str = findstr("debug-uarts", true);
     debug("debug_uarts_str=%p\n",debug_uarts_str);
 
@@ -659,6 +669,13 @@ found:
 
 std::vector<patch> ibootpatchfinder64_base::get_freshnonce_patch(){
     std::vector<patch> patches;
+
+    debug("check stage");
+    if(stage1) {
+        debug("iBootStage1 detected, not patching nvram");
+        return patches;
+    }
+    debug("stage not iBootStage1, continuing patch");
 
     loc_t noncevar_str = findstr("com.apple.System.boot-nonce", true);
     debug("noncevar_str=%p\n",noncevar_str);
