@@ -244,6 +244,18 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
         loc_t cert_str_loc = 0;
         loc_t bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, default_boot_args_xref);
         debug("bootarg_loc1: %p\n", bootarg_loc1);
+        loc_t platform_name_str_loc = _vmem->memstr("platform-name");
+        debug("platform_name_str_loc: %p\n", platform_name_str_loc);
+        loc_t platform_name_str_xref;
+        assure(platform_name_str_xref = find_literal_ref(platform_name_str_loc));
+        debug("platform_name_str_xref: %p\n", platform_name_str_xref);
+        vmem iter(*_vmem,platform_name_str_xref);
+        while(++iter != insn::adr) continue;
+        loc_t chipid_str = iter().imm();
+        if(!strncmp((char*)&_buf[chipid_str - _base], "t8010", sizeof("t8010")-1)) {
+            bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, bootarg_loc1 + 270);
+        }
+        debug("bootarg_loc1: %p\n", bootarg_loc1);
         if(bootarg_loc1) {
             loc_t bootarg_loc = bootarg_loc1 + 0x11;
             debug("bootarg_loc: %p\n", bootarg_loc);
@@ -277,31 +289,31 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
         }
 
         
-        vmem iter(*_vmem,default_boot_args_xref);
+        vmem iter2(*_vmem,default_boot_args_xref);
 
         uint8_t _reg = 0;
 
         if(_6723_100) {
-            assure(iter() == insn::nop);
+            assure(iter2() == insn::nop);
             loc_t adr2 = 0;
             retassure(adr2 = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER2), "Unable to find \"%s\" string!\n", DEFAULT_BOOTARGS_STR_OTHER2);
             loc_t adr2_xref = 0;
             retassure(adr2_xref = find_literal_ref(adr2), "Unable to find \"%s\" xref for string!\n", DEFAULT_BOOTARGS_STR_OTHER2); 
-            vmem iter(*_vmem,adr2_xref);
-            while(--iter != insn::sub) continue;
-            assure(iter() == insn::sub);
-            assure(iter().rd());
-            _reg = iter().rd();
+            vmem iter2(*_vmem,adr2_xref);
+            while(--iter2 != insn::sub) continue;
+            assure(iter2() == insn::sub);
+            assure(iter2().rd());
+            _reg = iter2().rd();
         } else {
-            if(iter() != insn::adr) {
-               --iter;
-               --iter;
-               assure(iter() == insn::bl);
-               ++iter;
-               _reg = iter().rd();
+            if(iter2() != insn::adr) {
+               --iter2;
+               --iter2;
+               assure(iter2() == insn::bl);
+               ++iter2;
+               _reg = iter2().rd();
             } else {
-               assure(iter() == insn::adr);
-                _reg = iter().rd();
+               assure(iter2() == insn::adr);
+                _reg = iter2().rd();
             }
         }
 
