@@ -53,7 +53,6 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
     stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
     retassure(*(uint32_t*)&_buf[0] == 0x90000000 || *(uint32_t*)&_buf[4] == 0x90000000, "invalid magic");
-    
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
     debug("iBoot base at=0x%016llx\n", _base);
     _vmem = new vmem({{_buf,_bufSize,_base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE | vsegment::vmprot::kVMPROTEXEC}});
@@ -67,6 +66,19 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
         }
     }
     debug("iBoot-%d inputted\n", _vers);
+
+    if(!stage1) {
+        loc_t platform_name_str_loc = _vmem->memstr("platform-name");
+        debug("platform_name_str_loc: %p\n", platform_name_str_loc);
+        loc_t platform_name_str_xref;
+        assure(platform_name_str_xref = find_literal_ref(platform_name_str_loc));
+        debug("platform_name_str_xref: %p\n", platform_name_str_xref);
+        vmem platform_name_str_mem(*_vmem,platform_name_str_xref);
+        while(++platform_name_str_mem != insn::adr) continue;
+        loc_t chipid_str = platform_name_str_mem().imm();
+        _chipid = std::atoi((char*)&_buf[chipid_str + 1 - _base]);
+        debug("iBoot chipid = %d\n", _chipid);
+    }
     
     didConstructSuccessfully = true;
 }
@@ -81,7 +93,6 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
     stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
     retassure(*(uint32_t*)&_buf[0] == 0x90000000, "invalid magic");
-    
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
     debug("iBoot base at=0x%016llx\n", _base);
     _vmem = new vmem({{_buf,_bufSize,_base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE | vsegment::vmprot::kVMPROTEXEC}});
@@ -95,6 +106,19 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
         }
     }
     debug("iBoot-%d inputted\n", _vers);
+
+    if(!stage1) {
+        loc_t platform_name_str_loc = _vmem->memstr("platform-name");
+        debug("platform_name_str_loc: %p\n", platform_name_str_loc);
+        loc_t platform_name_str_xref;
+        assure(platform_name_str_xref = find_literal_ref(platform_name_str_loc));
+        debug("platform_name_str_xref: %p\n", platform_name_str_xref);
+        vmem platform_name_str_mem(*_vmem,platform_name_str_xref);
+        while(++platform_name_str_mem != insn::adr) continue;
+        loc_t chipid_str = platform_name_str_mem().imm();
+        _chipid = std::atoi((char*)&_buf[chipid_str + 1 - _base]);
+        debug("iBoot chipid = %d\n", _chipid);
+    }
 }
 
 ibootpatchfinder64_base::~ibootpatchfinder64_base(){
@@ -244,15 +268,7 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
         loc_t cert_str_loc = 0;
         loc_t bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, default_boot_args_xref);
         debug("bootarg_loc1: %p\n", bootarg_loc1);
-        loc_t platform_name_str_loc = _vmem->memstr("platform-name");
-        debug("platform_name_str_loc: %p\n", platform_name_str_loc);
-        loc_t platform_name_str_xref;
-        assure(platform_name_str_xref = find_literal_ref(platform_name_str_loc));
-        debug("platform_name_str_xref: %p\n", platform_name_str_xref);
-        vmem iter(*_vmem,platform_name_str_xref);
-        while(++iter != insn::adr) continue;
-        loc_t chipid_str = iter().imm();
-        if(!strncmp((char*)&_buf[chipid_str - _base], "t8010", sizeof("t8010")-1)) {
+        if(_chipid == 8010) {
             bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, bootarg_loc1 + 270);
         }
         debug("bootarg_loc1: %p\n", bootarg_loc1);
@@ -574,12 +590,19 @@ std::vector<patch> ibootpatchfinder64_base::get_unlock_nvram_patch(){
     debug("debug_uarts_str=%p\n",debug_uarts_str);
 
     loc_t debug_uarts_ref = _vmem->memmem(&debug_uarts_str, sizeof(debug_uarts_str));
+
     debug("debug_uarts_ref=%p\n",debug_uarts_ref);
 
     loc_t setenv_whitelist = debug_uarts_ref;
     
-    while (_vmem->deref(setenv_whitelist-=8));
-    setenv_whitelist+=8;
+    if(_chipid == 8000 || _chipid == 8003) {
+        debug("chipid == a9\n");
+        setenv_whitelist-=16;
+    } else {
+        debug("chipid != a9\n");
+        while (_vmem->deref(setenv_whitelist-=8));
+        setenv_whitelist+=8;
+    }
     debug("setenv_whitelist=%p\n",setenv_whitelist);
 
     loc_t blacklist1_func = find_literal_ref(setenv_whitelist);
