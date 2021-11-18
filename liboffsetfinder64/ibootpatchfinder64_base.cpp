@@ -225,7 +225,7 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     loc_t default_boot_args_str_loc = 0;
     loc_t default_boot_args_xref = 0;
     int default_boot_args_len = 0;
-    bool _6723_100 = (_vers >= 6723 && _vers_arr[0] >= 100);
+    bool _6723_100 = (_vers == 6723 && _vers_arr[0] >= 100) || (_vers > 6723);
 
     try{
         default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR);

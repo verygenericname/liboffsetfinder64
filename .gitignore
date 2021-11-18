@@ -28,3 +28,5 @@ Build
 *.xcworkspace
 xcuserdata
 configure~
+.idea
+config.*
