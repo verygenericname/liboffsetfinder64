@@ -30,3 +30,4 @@ xcuserdata
 configure~
 .idea
 config.*
+.build_complete
