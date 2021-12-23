@@ -58,8 +58,19 @@ std::vector<patch> ibootpatchfinder64_iOS14::get_sigcheck_patch(){
     debug("img4interposercallback=%p",img4interposercallback);
     assure(img4interposercallback);
 
-    patches.push_back({img4interposercallback,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
-    patches.push_back({img4interposercallback + 4,"\xC0\x03\x5F\xD6" /*ret*/,4});
+    vmem iter3(*_vmem,img4interposercallback);
+    while(++iter3 != insn::ret);
+    loc_t img4interposercallbackret = iter3().pc();
+    assure(img4interposercallbackret);
+    debug("img4interposercallbackret=%p",img4interposercallbackret);
+    patches.push_back({img4interposercallbackret,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
+    patches.push_back({img4interposercallbackret + 4,"\xC0\x03\x5F\xD6" /*ret*/,4});
+    ++iter3;
+    while(++iter3 != insn::ret);
+    loc_t img4interposercallbackret2 = iter3().pc();
+    assure(img4interposercallbackret2);
+    debug("img4interposercallbackret2=%p",img4interposercallbackret2);
+    patches.push_back({img4interposercallbackret2 - 4,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
     return patches;
 }
 
