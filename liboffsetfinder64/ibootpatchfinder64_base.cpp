@@ -146,7 +146,7 @@ std::vector<patch> ibootpatchfinder64_base::get_sigcheck_patch(){
     loc_t img4decodemanifestexists = 0x0;
     bool isnotptr = false;
     bool isadrl = false;
-    if(_vers == 5540 && _vers_arr[0] >= 100 || _vers >= 5540) {
+    if(_vers == 5540 && _vers_arr[0] >= 100 || _vers > 5540) {
         debug("get_sigcheck_patch: iOS 13.4 or later(iBoot-%d.%d) detected.",_vers, _vers_arr[0]);
         img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\xE8\x00\x00\xB4", 12);
     } else if(_vers == 5540 && _vers_arr[0] <= 100 || _vers <= 5540 && _vers >= 3406) {
