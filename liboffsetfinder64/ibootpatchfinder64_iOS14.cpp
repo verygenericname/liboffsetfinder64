@@ -63,14 +63,30 @@ std::vector<patch> ibootpatchfinder64_iOS14::get_sigcheck_patch(){
     loc_t img4interposercallbackret = iter3().pc();
     assure(img4interposercallbackret);
     debug("img4interposercallbackret=%p",img4interposercallbackret);
-    patches.push_back({img4interposercallbackret,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
-    patches.push_back({img4interposercallbackret + 4,"\xC0\x03\x5F\xD6" /*ret*/,4});
-    ++iter3;
-    while(++iter3 != insn::ret);
-    loc_t img4interposercallbackret2 = iter3().pc();
-    assure(img4interposercallbackret2);
-    debug("img4interposercallbackret2=%p",img4interposercallbackret2);
-    patches.push_back({img4interposercallbackret2 - 4,"\x00\x00\x80\xD2" /*mov x0, 0*/,4});
+    if(--iter3 == insn::add) {
+        patches.push_back({img4interposercallbackret, "\x00\x00\x80\xD2" /*mov x0, 0*/, 4});
+        patches.push_back({img4interposercallbackret + 4, "\xC0\x03\x5F\xD6" /*ret*/, 4});
+        ++iter3;
+        while (++iter3 != insn::ret);
+        loc_t img4interposercallbackret2 = iter3().pc();
+        assure(img4interposercallbackret2);
+        debug("img4interposercallbackret2=%p", img4interposercallbackret2);
+        patches.push_back({img4interposercallbackret2 - 4, "\x00\x00\x80\xD2" /*mov x0, 0*/, 4});
+    } else {
+        patches.push_back({img4interposercallbackret - 4, "\x00\x00\x80\xD2" /*mov x0, 0*/, 4});
+        while(--iter3 != insn::b) continue;
+        if(--iter3 != insn::ldp) {
+            while(--iter3 != insn::b) continue;
+            if(--iter3 != insn::ldp) {
+                reterror("img4interposercallback couldn't find branch for ret2!");
+            } else {
+                while(--iter3 != insn::mov) continue;
+                loc_t img4interposercallbackmovx20 = iter3().pc();
+                debug("img4interposercallbackmovx20=%p", img4interposercallbackmovx20);
+                patches.push_back({img4interposercallbackmovx20, "\x00\x00\x80\xD2" /*mov x0, 0*/, 4});
+            }
+        }
+    }
     return patches;
 }
 
