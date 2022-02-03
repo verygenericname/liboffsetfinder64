@@ -229,24 +229,25 @@ std::vector<patch> ibootpatchfinder64_base::get_demotion_patch(){
     }
     return patches;
 }
-std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *bootargs){
-    std::vector<patch> patches;
-    if(!bootargs)
+std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *bootargs) {
+    std::vector <patch> patches;
+    if (!bootargs)
         return patches;
     loc_t default_boot_args_str_loc = 0;
     loc_t default_boot_args_xref = 0;
     int default_boot_args_len = 0;
-    bool _6723_100 = (_vers == 6723 && _vers_arr[0] >= 100) || (_vers > 6723);
+    bool _7429_0 = (_vers >= 7429 && _vers_arr[0] >= 0);
+    bool _6723_100 = ((_vers == 6723 && _vers_arr[0] >= 100) || (_vers > 6723)) && !_7429_0;
 
-    try{
+    try {
         default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR);
         default_boot_args_len = strlen(DEFAULT_BOOTARGS_STR);
-    }catch(...){
-        try{
+    } catch (...) {
+        try {
             debug("DEFAULT_BOOTARGS_STR not found, trying fallback to DEFAULT_BOOTARGS_STR_13\n");
             default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR_13);
             default_boot_args_len = strlen(DEFAULT_BOOTARGS_STR_13);
-        }catch(...){
+        } catch (...) {
             debug("DEFAULT_BOOTARGS_STR_13 not found, trying fallback to DEFAULT_BOOTARGS_STR_OTHER\n");
             default_boot_args_str_loc = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER);
             default_boot_args_len = strlen(DEFAULT_BOOTARGS_STR_OTHER);
@@ -254,101 +255,102 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     }
 
     assure(default_boot_args_str_loc);
-    debug("default_boot_args_str_loc=%p\n",default_boot_args_str_loc);
-   
+    debug("default_boot_args_str_loc=%p\n", default_boot_args_str_loc);
 
-    if(_6723_100) {
+
+    if(_6723_100 || _7429_0) {
         loc_t adr1 = 0;
         assure(adr1 = find_literal_ref(default_boot_args_str_loc));
-        debug("adr1=%p\n",adr1);
-        vmem iter(*_vmem,adr1);
-        while(++iter != insn::nop) continue;
-        while(++iter != insn::nop) continue;
-        while(++iter != insn::nop) continue;
-        while(++iter != insn::nop) continue;
-        while(++iter != insn::nop) continue;
-        debug("iter: %p\n",iter().pc());
-        default_boot_args_xref = iter;
+        debug("adr1=%p\n", adr1);
+        vmem iter(*_vmem, adr1);
+        while (++iter != insn::b) continue;
+        loc_t bootargstackvarbranch = 0;
+        assure(bootargstackvarbranch = (loc_t)iter().imm());
+        debug("bootargstackvarbranch=%p\n", bootargstackvarbranch);
+        iter = vmem(*_vmem,bootargstackvarbranch);
+        while(++iter != insn::bl) continue;
+        while(--iter != insn::nop) continue;
+        loc_t bootargstackvar = iter().pc();
+        assure(default_boot_args_xref = bootargstackvar);
+        debug("bootargstackvar=%p\n", bootargstackvar);
     } else {
         assure(default_boot_args_xref = find_literal_ref(default_boot_args_str_loc));
         debug("default_boot_args_xref=%p\n",default_boot_args_xref);
     }
 
-    if (strlen(bootargs) > default_boot_args_len) {
-        debug("Relocating boot-args string...\n");
-        loc_t cert_str_loc = 0;
-        loc_t bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, default_boot_args_xref);
-        debug("bootarg_loc1: %p\n", bootarg_loc1);
-        if(_chipid == 8010 || (_vers < 7420 && (_chipid == 8000 || _chipid == 8003))) {
-            bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, bootarg_loc1 + 270);
-        }
-        debug("bootarg_loc1: %p\n", bootarg_loc1);
-        if(bootarg_loc1) {
-            loc_t bootarg_loc = bootarg_loc1 + 0x11;
-            debug("bootarg_loc: %p\n", bootarg_loc);
-            vmem iter(*_vmem,bootarg_loc);
-            while(true) {
-                if(iter().opcode() == 0x00000000) {
-                    ++iter;
-                    if(iter().opcode() == 0x00000000) {
-                        --iter;
-                        break;
-                    }
-                    else
-                        --iter;
-                }
+    debug("Relocating boot-args string...\n");
+    loc_t cert_str_loc = 0;
+    loc_t bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, default_boot_args_xref);
+    if(_chipid == 8010 || ((_chipid == 8000 || _chipid == 8003) && !_7429_0)) {
+        debug("Finding another bootarg location...\n");
+        bootarg_loc1 = _vmem->memmem(_270ZEROES, 270, bootarg_loc1 + 270);
+    }
+    debug("bootarg_loc1=%p\n", bootarg_loc1);
+    if(bootarg_loc1) {
+        loc_t bootarg_loc = bootarg_loc1 + 0x11;
+        debug("bootarg_loc=%p\n", bootarg_loc);
+        vmem iter(*_vmem,bootarg_loc);
+        while(true) {
+            if(iter().opcode() == 0x00000000) {
                 ++iter;
+                if(iter().opcode() == 0x00000000) {
+                    --iter;
+                    break;
+                }
+                else
+                    --iter;
             }
-
-            debug("Pointing default boot-args xref to %p...\n", iter().pc() - 1);
-
-            default_boot_args_str_loc = iter().pc() - 1;
-        } else {
-            /* Find the "Reliance on this cert..." string. */
-            retassure(cert_str_loc = _vmem->memstr(CERT_STR), "Unable to find \"%s\" string!\n", CERT_STR);
-
-            debug("\"%s\" string found at %p\n", CERT_STR, cert_str_loc);
-
-            /* Point the boot-args xref to the "Reliance on this cert..." string. */
-            debug("Pointing default boot-args xref to %p...\n", cert_str_loc);
-
-            default_boot_args_str_loc = cert_str_loc;
+            ++iter;
         }
 
-        
-        vmem iter2(*_vmem,default_boot_args_xref);
+        debug("Pointing default boot-args xref to %p...\n", iter().pc() - 1);
 
-        uint8_t _reg = 0;
+        default_boot_args_str_loc = iter().pc() - 1;
+    } else {
+        /* Find the "Reliance on this cert..." string. */
+        retassure(cert_str_loc = _vmem->memstr(CERT_STR), "Unable to find \"%s\" string!\n", CERT_STR);
 
-        if(_6723_100) {
-            assure(iter2() == insn::nop);
-            loc_t adr2 = 0;
-            retassure(adr2 = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER2), "Unable to find \"%s\" string!\n", DEFAULT_BOOTARGS_STR_OTHER2);
-            loc_t adr2_xref = 0;
-            retassure(adr2_xref = find_literal_ref(adr2), "Unable to find \"%s\" xref for string!\n", DEFAULT_BOOTARGS_STR_OTHER2); 
-            vmem iter2(*_vmem,adr2_xref);
-            while(--iter2 != insn::sub) continue;
-            assure(iter2() == insn::sub);
-            assure(iter2().rd());
+        debug("\"%s\" string found at %p\n", CERT_STR, cert_str_loc);
+
+        /* Point the boot-args xref to the "Reliance on this cert..." string. */
+        debug("Pointing default boot-args xref to %p...\n", cert_str_loc);
+
+        default_boot_args_str_loc = cert_str_loc;
+    }
+
+
+    vmem iter2(*_vmem,default_boot_args_xref);
+
+    uint8_t _reg = 0;
+
+    if(_6723_100 || _7429_0) {
+        assure(iter2() == insn::nop);
+        loc_t adr2 = 0;
+        retassure(adr2 = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER2), "Unable to find \"%s\" string!\n", DEFAULT_BOOTARGS_STR_OTHER2);
+        loc_t adr2_xref = 0;
+        retassure(adr2_xref = find_literal_ref(adr2), "Unable to find \"%s\" xref for string!\n", DEFAULT_BOOTARGS_STR_OTHER2); 
+        iter2 = vmem(*_vmem,adr2_xref);
+        while(--iter2 != insn::sub) continue;
+        assure(iter2() == insn::sub);
+        assure(iter2().rd());
+        _reg = iter2().rd();
+    } else {
+        if(iter2() != insn::adr) {
+            --iter2;
+            --iter2;
+            assure(iter2() == insn::bl);
+            ++iter2;
             _reg = iter2().rd();
         } else {
-            if(iter2() != insn::adr) {
-               --iter2;
-               --iter2;
-               assure(iter2() == insn::bl);
-               ++iter2;
-               _reg = iter2().rd();
-            } else {
-               assure(iter2() == insn::adr);
-                _reg = iter2().rd();
-            }
+            assure(iter2() == insn::adr);
+            _reg = iter2().rd();
         }
-
-        insn pins = insn::new_general_adr(default_boot_args_xref, (int64_t)default_boot_args_str_loc, _reg);
-        
-        uint32_t opcode = pins.opcode();
-        patches.push_back({(loc_t)pins.pc(), &opcode, 4});
     }
+
+    insn pins = insn::new_general_adr(default_boot_args_xref, (int64_t)default_boot_args_str_loc, _reg);
+    
+    uint32_t opcode = pins.opcode();
+    patches.push_back({(loc_t)pins.pc(), &opcode, 4});
     
     debug("Applying custom boot-args \"%s\"\n", bootargs);
     patches.push_back({default_boot_args_str_loc, bootargs, strlen(bootargs)+1});
@@ -356,7 +358,7 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
 
     vmem iter(*_vmem,default_boot_args_xref);
     uint8_t xrefRD = 0;
-    if(_6723_100) {
+    if(_6723_100 || _7429_0) {
         xrefRD = 4;
     } else {
         xrefRD = iter().rd();
