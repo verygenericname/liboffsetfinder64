@@ -27,6 +27,7 @@ using namespace tihmstar::libinsn;
 #define DEFAULT_BOOTARGS_STR_13 "rd=md0 -progress -restore"
 #define CERT_STR "Apple Inc.1"
 
+
 ibootpatchfinder64::ibootpatchfinder64(bool freeBuf)
 : patchfinder64(freeBuf)
 {

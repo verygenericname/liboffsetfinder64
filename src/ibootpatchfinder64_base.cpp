@@ -29,6 +29,7 @@ using namespace tihmstar::libinsn;
 #define DEFAULT_BOOTARGS_STR_OTHER2 " -restore"
 #define CERT_STR "Apple Inc.1"
 #define _270ZEROES "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+#define RECOVERY_IMAGE "delay-recovery-image"
 
 ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     ibootpatchfinder64(true)
@@ -55,7 +56,10 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     retassure(*(uint32_t*)&_buf[0] == 0x90000000 || *(uint32_t*)&_buf[4] == 0x90000000, "invalid magic");
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
     debug("iBoot base at=0x%016llx\n", _base);
-    _vmem = new vmem({{_buf,_bufSize,_base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE | vsegment::vmprot::kVMPROTEXEC}});
+    if(!_vmem) {
+        _vmem = new vmem({{_buf, _bufSize, _base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE |
+                                                  vsegment::vmprot::kVMPROTEXEC}});
+    }
     retassure(_vers = atoi((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
     std::string _vers_str = std::string((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]);
     for(int i = 0; i < 5; i++) {
@@ -66,6 +70,9 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
         }
     }
     debug("iBoot-%d inputted\n", _vers);
+    if(_vers >= 7459) {
+        stage1 = _vmem->memstr(RECOVERY_IMAGE) != 0;
+    }
 
     if(!stage1) {
         loc_t platform_name_str_loc = _vmem->memstr("platform-name");
@@ -106,6 +113,9 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
         }
     }
     debug("iBoot-%d inputted\n", _vers);
+    if(_vers >= 7459) {
+        stage1 = _vmem->memstr(RECOVERY_IMAGE) != 0;
+    }
 
     if(!stage1) {
         loc_t platform_name_str_loc = _vmem->memstr("platform-name");

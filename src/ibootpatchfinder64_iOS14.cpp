@@ -34,7 +34,12 @@ ibootpatchfinder64_iOS14::ibootpatchfinder64_iOS14(const void *buffer, size_t bu
 
 std::vector<patch> ibootpatchfinder64_iOS14::get_sigcheck_patch(){
     std::vector<patch> patches;
-    loc_t img4decodemanifestexists = img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\xE8\x00\x00\xB4", 12); //0x180032144;
+    loc_t img4decodemanifestexists;
+    if(_vers >= 7459 && stage1) {
+            img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\x28\x01\x00\xB4", 12);
+    } else {
+        img4decodemanifestexists = _vmem->memmem("\xE8\x03\x00\xAA\xC0\x00\x80\x52\xE8\x00\x00\xB4", 12); //0x180032144;
+    }
     debug("img4decodemanifestexists=%p",img4decodemanifestexists);
     assure(img4decodemanifestexists);
 
