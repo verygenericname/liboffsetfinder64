@@ -50,7 +50,8 @@ add_library(offsetfinder64
 target_include_directories(offsetfinder64 PRIVATE
         "${CMAKE_SOURCE_DIR}/dep_root/include"
         src
-		include/liboffsetfinder64)
+		include/liboffsetfinder64
+		include)
 target_link_directories(offsetfinder64 PRIVATE
         "${CMAKE_SOURCE_DIR}/dep_root/lib")
 if(NOT DEFINED NO_PKGCFG AND NOT "$ENV{NO_PKGCFG}" MATCHES "1")
