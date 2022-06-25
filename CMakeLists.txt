@@ -64,8 +64,26 @@ endif()
 
 execute_process(COMMAND git rev-list --count HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_VARIABLE VERSION_COMMIT_COUNT ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_VARIABLE VERSION_COMMIT_SHA ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND cp "${CMAKE_SOURCE_DIR}/pkgconfig/liboffsetfinder64.pc.in" "${CMAKE_SOURCE_DIR}/pkgconfig/liboffsetfinder64.pc" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND sed -i "s/VERSION_COUNT/${VERSION_COMMIT_COUNT}/g" ${CMAKE_SOURCE_DIR}/pkgconfig/liboffsetfinder64.pc WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REPLACE "/lib" "" CMAKE_INSTALL_PREFIX2 ${CMAKE_INSTALL_PREFIX})
+string(REPLACE "/" "\\/" CMAKE_INSTALL_PREFIX1 ${CMAKE_INSTALL_PREFIX2})
+execute_process(COMMAND sed -i "s/PREFIX/${CMAKE_INSTALL_PREFIX1}/g" "${CMAKE_SOURCE_DIR}/pkgconfig/liboffsetfinder64.pc" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_STRIP_TRAILING_WHITESPACE)
 add_definitions(
 		-DVERSION_COMMIT_COUNT="${VERSION_COMMIT_COUNT}"
 		-DVERSION_COMMIT_SHA="${VERSION_COMMIT_SHA}")
+install(FILES pkgconfig/liboffsetfinder64.pc
+		DESTINATION "${CMAKE_INSTALL_PREFIX}/pkgconfig")
+install(FILES
+		include/liboffsetfinder64/common.h
+		include/liboffsetfinder64/ibootpatchfinder64.hpp
+		include/liboffsetfinder64/ibootpatchfinder64_base.hpp
+		include/liboffsetfinder64/ibootpatchfinder64_iOS14.hpp
+		include/liboffsetfinder64/kernelpatchfinder64.hpp
+		include/liboffsetfinder64/machopatchfinder64.hpp
+		include/liboffsetfinder64/OFexception.hpp
+		include/liboffsetfinder64/patch.hpp
+		include/liboffsetfinder64/patchfinder64.hpp
+		DESTINATION "${CMAKE_INSTALL_PREFIX1}/include/liboffsetfinder64")
 install(TARGETS offsetfinder64
         DESTINATION ${CMAKE_INSTALL_PREFIX})

@@ -12,6 +12,8 @@ cd ${WORKFLOW_ROOT}
 echo "liboffsetfinder64-Linux-x86_64-Build_${liboffsetfinder64_VERSION}-RELEASE.tar.xz" > name1.txt
 echo "liboffsetfinder64-Linux-x86_64-Build_${liboffsetfinder64_VERSION}-DEBUG.tar.xz" > name2.txt
 cp -RpP "${BASE}/cmake-build-release-x86_64/liboffsetfinder64.a" liboffsetfinder64.a
-tar cpPJvf "liboffsetfinder641.tar.xz" liboffsetfinder64.a
+cp -RpP "${BASE}/pkgconfig" .
+rm pkgconfig/*.in
+tar cpPJvf "liboffsetfinder641.tar.xz" liboffsetfinder64.a pkgconfig
 cp -RpP "${BASE}/cmake-build-debug-x86_64/liboffsetfinder64.a" liboffsetfinder64.a
-tar cpPJvf "liboffsetfinder642.tar.xz" liboffsetfinder64.a
+tar cpPJvf "liboffsetfinder642.tar.xz" liboffsetfinder64.a pkgconfig
