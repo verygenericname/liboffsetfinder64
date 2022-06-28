@@ -17,6 +17,7 @@ using namespace tihmstar::offsetfinder64;
 using namespace tihmstar::libinsn;
 
 #define IBOOT_STAGE_STR_OFFSET 0x200
+#define IBOOT_MODE_STR_OFFSET 0x240
 #define IBOOT_VERS_STR_OFFSET 0x280
 #define iBOOT_BASE_OFFSET 0x318
 #define KERNELCACHE_PREP_STRING "__PAGEZERO"
@@ -52,6 +53,8 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
     stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
+    dev = !strncmp((char*)&_buf[IBOOT_MODE_STR_OFFSET], "DEVELOPMENT", sizeof("DEVELOPMENT")-1);
+    debug("mode=%s\n", dev ? "DEVELOPMENT" : "RELEASE");
     retassure(*(uint32_t*)&_buf[0] == 0x90000000 || *(uint32_t*)&_buf[4] == 0x90000000, "invalid magic");
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
     debug("iBoot base at=0x%016llx\n", _base);
@@ -95,6 +98,8 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
     stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
+    dev = !strncmp((char*)&_buf[IBOOT_MODE_STR_OFFSET], "DEVELOPMENT", sizeof("DEVELOPMENT")-1);
+    debug("mode=%s\n", dev ? "DEVELOPMENT" : "RELEASE");
     retassure(*(uint32_t*)&_buf[0] == 0x90000000, "invalid magic");
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
     debug("iBoot base at=0x%016llx\n", _base);
@@ -258,10 +263,10 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
     }
 
     assure(default_boot_args_str_loc);
+    default_boot_args_str_loc = dev ? default_boot_args_str_loc - 1 : default_boot_args_str_loc;
     debug("default_boot_args_str_loc=%p\n", default_boot_args_str_loc);
 
-
-    if(_6723_100 || _7429_0) {
+    if((_6723_100 || _7429_0) && !dev) {
         loc_t adr1 = 0;
         assure(adr1 = find_literal_ref(default_boot_args_str_loc));
         debug("adr1=%p\n", adr1);
@@ -326,7 +331,7 @@ std::vector<patch> ibootpatchfinder64_base::get_boot_arg_patch(const char *boota
 
     uint8_t _reg = 0;
 
-    if(_6723_100 || _7429_0) {
+    if((_6723_100 || _7429_0) && !dev) {
         assure(iter2() == insn::nop);
         loc_t adr2 = 0;
         retassure(adr2 = _vmem->memstr(DEFAULT_BOOTARGS_STR_OTHER2), "Unable to find \"%s\" string!\n", DEFAULT_BOOTARGS_STR_OTHER2);
@@ -599,6 +604,20 @@ std::vector<patch> ibootpatchfinder64_base::get_unlock_nvram_patch(){
     if(stage1) {
         debug("iBootStage1 detected, not patching nvram");
         return patches;
+    } else if(dev) {
+        debug("DEVELOPMENT iBoot Detected, attempting simpler nvram patch");
+        loc_t nvram_set_var_str = findstr("nvram_set_var", true);
+        assure(nvram_set_var_str);
+        debug("nvram_set_var_str=%p\n",nvram_set_var_str);
+        loc_t nvram_set_var_str_xref = find_literal_ref(nvram_set_var_str);
+        assure(nvram_set_var_str_xref);
+        debug("nvram_set_var_str_xref=%p\n",nvram_set_var_str_xref);
+        vmem iter(*_vmem,nvram_set_var_str_xref);
+        while(--iter != insn::orr) continue;
+        loc_t blacklist_func_top = iter().pc() - 4;
+        debug("blacklist_func_top=%p\n",blacklist_func_top);
+        patches.push_back({blacklist_func_top,"\x00\x00\x80\xD2"/* movz x0, #0x0*/"\xC0\x03\x5F\xD6"/*ret*/,8});
+        return patches;
     }
     debug("stage not iBootStage1, continuing patch");
 
@@ -606,6 +625,9 @@ std::vector<patch> ibootpatchfinder64_base::get_unlock_nvram_patch(){
     debug("debug_uarts_str=%p\n",debug_uarts_str);
 
     loc_t debug_uarts_ref = _vmem->memmem(&debug_uarts_str, sizeof(debug_uarts_str));
+    if(dev) {
+        debug_uarts_ref = _vmem->memmem(&debug_uarts_str, sizeof(debug_uarts_str), debug_uarts_ref + 4);
+    }
 
     debug("debug_uarts_ref=%p\n",debug_uarts_ref);
 
@@ -627,8 +649,8 @@ std::vector<patch> ibootpatchfinder64_base::get_unlock_nvram_patch(){
     loc_t blacklist1_func_top = find_bof(blacklist1_func);
     debug("blacklist1_func_top=%p\n",blacklist1_func_top);
 
-    patches.push_back({blacklist1_func_top,"\x00\x00\x80\xD2"/* movz x0, #0x0*/"\xC0\x03\x5F\xD6"/*ret*/,8});
-    
+    patches.push_back({blacklist1_func_top, "\x00\x00\x80\xD2"/* movz x0, #0x0*/"\xC0\x03\x5F\xD6"/*ret*/, 8});
+
     loc_t env_whitelist = setenv_whitelist;
     while (_vmem->deref(env_whitelist+=8));
     env_whitelist+=8;

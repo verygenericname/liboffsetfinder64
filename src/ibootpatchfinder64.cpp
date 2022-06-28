@@ -17,6 +17,7 @@ using namespace tihmstar::offsetfinder64;
 using namespace tihmstar::libinsn;
 
 #define IBOOT_STAGE_STR_OFFSET 0x200
+#define IBOOT_MODE_STR_OFFSET 0x240
 #define IBOOT_VERS_STR_OFFSET 0x280
 #define iBOOT_BASE_OFFSET 0x318
 #define iBOOT_14_BASE_OFFSET 0x300
@@ -83,7 +84,15 @@ ibootpatchfinder64 *ibootpatchfinder64::make_ibootpatchfinder64(const void *buff
     debug("iBoot-%d inputted\n", vers);
 
     if (vers >= 6671) {
-        printf("iOS 14 iBoot detected!\n");
+        if(vers >= 7429 && vers < 8419) {
+            printf("iOS 15 iBoot detected!\n");
+        } else if(vers >= 8419 && vers <= 9000) {
+            printf("iOS 16 iBoot detected!\n");
+        } else if(vers < 7429) {
+            printf("iOS 14 iBoot detected!\n");
+        } else {
+            printf("Unknown iOS versioned iBoot detected!\n");
+        }
         return new ibootpatchfinder64_iOS14(buf,bufSize,takeOwnership);
     }
     

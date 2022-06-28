@@ -27,6 +27,7 @@ namespace tihmstar {
             uint32_t _vers_arr[5];
             int _chipid;
             bool stage1 = false;
+            bool dev = false;
             
             ibootpatchfinder64(bool freeBuf);
         public:
