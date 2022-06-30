@@ -53,6 +53,7 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
     stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
+    stage2 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage2", sizeof("iBootStage2")-1);
     dev = !strncmp((char*)&_buf[IBOOT_MODE_STR_OFFSET], "DEVELOPMENT", sizeof("DEVELOPMENT")-1);
     debug("mode=%s\n", dev ? "DEVELOPMENT" : "RELEASE");
     retassure(*(uint32_t*)&_buf[0] == 0x90000000 || *(uint32_t*)&_buf[4] == 0x90000000, "invalid magic");
@@ -98,6 +99,7 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
     stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
+    stage2 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage2", sizeof("iBootStage2")-1);
     dev = !strncmp((char*)&_buf[IBOOT_MODE_STR_OFFSET], "DEVELOPMENT", sizeof("DEVELOPMENT")-1);
     debug("mode=%s\n", dev ? "DEVELOPMENT" : "RELEASE");
     retassure(*(uint32_t*)&_buf[0] == 0x90000000, "invalid magic");
@@ -604,22 +606,47 @@ std::vector<patch> ibootpatchfinder64_base::get_unlock_nvram_patch(){
     if(stage1) {
         debug("iBootStage1 detected, not patching nvram");
         return patches;
-    } else if(dev) {
-        debug("DEVELOPMENT iBoot Detected, attempting simpler nvram patch");
-        loc_t nvram_set_var_str = findstr("nvram_set_var", true);
-        assure(nvram_set_var_str);
-        debug("nvram_set_var_str=%p\n",nvram_set_var_str);
-        loc_t nvram_set_var_str_xref = find_literal_ref(nvram_set_var_str);
-        assure(nvram_set_var_str_xref);
-        debug("nvram_set_var_str_xref=%p\n",nvram_set_var_str_xref);
-        vmem iter(*_vmem,nvram_set_var_str_xref);
-        while(--iter != insn::orr) continue;
-        loc_t blacklist_func_top = iter().pc() - 4;
-        debug("blacklist_func_top=%p\n",blacklist_func_top);
-        patches.push_back({blacklist_func_top,"\x00\x00\x80\xD2"/* movz x0, #0x0*/"\xC0\x03\x5F\xD6"/*ret*/,8});
-        return patches;
     }
     debug("stage not iBootStage1, continuing patch");
+    if(dev) {
+        debug("DEVELOPMENT iBoot Detected, attempting simpler nvram patch");
+        if(!stage2) {
+            loc_t nvram_set_var_str = findstr("nvram_set_var", true);
+            assure(nvram_set_var_str);
+            debug("nvram_set_var_str=%p\n",nvram_set_var_str);
+            loc_t nvram_set_var_str_xref = find_literal_ref(nvram_set_var_str);
+            assure(nvram_set_var_str_xref);
+            debug("nvram_set_var_str_xref=%p\n",nvram_set_var_str_xref);
+            vmem iter(*_vmem,nvram_set_var_str_xref);
+            while(--iter != insn::orr) continue;
+            loc_t blacklist_func_top = iter().pc() - 4;
+            debug("blacklist_func_top=%p\n",blacklist_func_top);
+            patches.push_back({blacklist_func_top,"\x00\x00\x80\xD2"/* movz x0, #0x0*/"\xC0\x03\x5F\xD6"/*ret*/,4});
+        } else {
+            loc_t nvram_set_var_str = findstr("Blocked shadowed write to variable", false);
+            assure(nvram_set_var_str);
+            debug("nvram_set_var_str=%p\n",nvram_set_var_str);
+            loc_t nvram_set_var_str_xref = find_literal_ref(nvram_set_var_str);
+            assure(nvram_set_var_str_xref);
+            debug("nvram_set_var_str_xref=%p\n",nvram_set_var_str_xref);
+            vmem iter(*_vmem,nvram_set_var_str_xref);
+            while(--iter != insn::nop) continue;
+            loc_t blacklist_compare_nop = iter().pc();
+            debug("blacklist_compare_nop=%p\n",blacklist_compare_nop);
+            patches.push_back({blacklist_compare_nop,"\x33\x00\x80\x52"/* mov w19, #0x1*/,4});
+        }
+        loc_t com_apple_system = findstr("com.apple.System.", true);
+        debug("com_apple_system=%p\n",com_apple_system);
+
+        loc_t com_apple_system_xref = find_literal_ref(com_apple_system);
+        debug("com_apple_system_xref=%p\n",com_apple_system_xref);
+
+        loc_t func3top = find_bof(com_apple_system_xref);
+        debug("func3top=%p\n",func3top);
+
+        patches.push_back({func3top,"\x00\x00\x80\xD2"/* movz x0, #0x0*/"\xC0\x03\x5F\xD6"/*ret*/,8});
+        return patches;
+    }
 
     loc_t debug_uarts_str = findstr("debug-uarts", true);
     debug("debug_uarts_str=%p\n",debug_uarts_str);
