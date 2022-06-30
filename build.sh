@@ -4,7 +4,7 @@ which cmake >/dev/null
 which make >/dev/null
 if [[ "$?" -gt 0 ]]; then echo "[!] make not installed or not found, refusing to build!"; exit 1; fi
 export CC="$(which clang)"
-export CXX="$(which clang)"
+export CXX="$(which clang++)"
 which xcrun >/dev/null
  if [[ "$?" -lt 1 ]]; then export CC="$(xcrun --find clang)"; export CXX="$(xcrun --find clang++)"; fi
 echo "[*] Building liboffsetfinder64"
