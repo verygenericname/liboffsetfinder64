@@ -52,8 +52,18 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
     assure(_bufSize > 0x1000);
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
-    stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
-    stage2 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage2", sizeof("iBootStage2")-1);
+    retassure(_vers = atoi((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
+    debug("_vers: %d\n", _vers);
+    if(_vers < 3000) {
+        debug("1337: 1\n");
+        stage1 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1") - 1);
+        stage2 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage2", sizeof("iBootStage2") - 1);
+    } else {
+        debug("1337: 2\n");
+        stage1 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBSS", sizeof("iBSS") - 1);
+        stage2 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBEC", sizeof("iBEC") - 1);
+    }
+    debug("1337: 3\n");
     dev = !strncmp((char*)&_buf[IBOOT_MODE_STR_OFFSET], "DEVELOPMENT", sizeof("DEVELOPMENT")-1);
     debug("mode=%s\n", dev ? "DEVELOPMENT" : "RELEASE");
     retassure(*(uint32_t*)&_buf[0] == 0x90000000 || *(uint32_t*)&_buf[4] == 0x90000000, "invalid magic");
@@ -63,7 +73,6 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const char * filename) :
         _vmem = new vmem({{_buf, _bufSize, _base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE |
                                                   vsegment::vmprot::kVMPROTEXEC}});
     }
-    retassure(_vers = atoi((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
     std::string _vers_str = std::string((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]);
     for(int i = 0; i < 5; i++) {
         std::size_t pos = _vers_str.find('.');
@@ -98,15 +107,20 @@ ibootpatchfinder64_base::ibootpatchfinder64_base(const void *buffer, size_t bufS
     assure(_bufSize > 0x1000);
     
     assure(!strncmp((char*)&_buf[IBOOT_VERS_STR_OFFSET], "iBoot", sizeof("iBoot")-1));
-    stage1 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1")-1);
-    stage2 = !strncmp((char*)&_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage2", sizeof("iBootStage2")-1);
+    retassure(_vers = atoi((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
+    if(_vers < 3000) {
+        stage1 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBSS", sizeof("iBSS") - 1);
+        stage2 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBEC", sizeof("iBEC") - 1);
+    } else {
+        stage1 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage1", sizeof("iBootStage1") - 1);
+        stage2 = !strncmp((char *) &_buf[IBOOT_STAGE_STR_OFFSET], "iBootStage2", sizeof("iBootStage2") - 1);
+    }
     dev = !strncmp((char*)&_buf[IBOOT_MODE_STR_OFFSET], "DEVELOPMENT", sizeof("DEVELOPMENT")-1);
     debug("mode=%s\n", dev ? "DEVELOPMENT" : "RELEASE");
     retassure(*(uint32_t*)&_buf[0] == 0x90000000, "invalid magic");
     _entrypoint = _base = (loc_t)*(uint64_t*)&_buf[iBOOT_BASE_OFFSET];
     debug("iBoot base at=0x%016llx\n", _base);
     _vmem = new vmem({{_buf,_bufSize,_base, vsegment::vmprot::kVMPROTREAD | vsegment::vmprot::kVMPROTWRITE | vsegment::vmprot::kVMPROTEXEC}});
-    retassure(_vers = atoi((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]), "No iBoot version found!\n");
     std::string _vers_str = std::string((char*)&_buf[IBOOT_VERS_STR_OFFSET+6]);
     for(int i = 0; i < 5; i++) {
         std::size_t pos = _vers_str.find('.');
