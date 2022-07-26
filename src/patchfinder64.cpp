@@ -201,6 +201,18 @@ loc_t patchfinder64::find_literal_ref(loc_t pos, int ignoreTimes, loc_t startPos
                     }
                 }
             }
+
+            if (adrp() == insn::bcond) {
+                uint64_t imm = 0;
+                imm = adrp().imm();
+                if (imm == (int64_t)pos){
+                    if (ignoreTimes) {
+                        ignoreTimes--;
+                        continue;
+                    }
+                    return (loc_t)adrp.pc();
+                }
+            }
         }
     } catch (tihmstar::out_of_range &e) {
         return 0;
