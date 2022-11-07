@@ -24,7 +24,7 @@ namespace tihmstar {
             virtual std::vector<patch> get_demotion_patch() override;
 
             virtual std::vector<patch> get_change_reboot_to_fsboot_patch() override;
-            virtual std::vector<patch> change_kernelcache_to_kernelcachd_patch() override;
+            virtual std::vector<patch> change_kernelcache_to_kernelcachd_patch();
 
             virtual loc_t find_iBoot_logstr(uint64_t loghex, int skip = 0, uint64_t shortdec = 0) override;
 
