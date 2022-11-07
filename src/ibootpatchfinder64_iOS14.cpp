@@ -165,6 +165,18 @@ std::vector<patch> ibootpatchfinder64_iOS14::get_change_reboot_to_fsboot_patch()
     return patches;
 }
 
+std::vector<patch> ibootpatchfinder64_iOS14::change_kernelcache_to_kernelcachd_patch(){
+    std::vector<patch> patches;
+
+    loc_t kcachestr = findstr("/System/Library/Caches/com.apple.kernelcaches/kernelcache", true);
+    debug("kcachestr=%p",kcachestr);
+    
+
+    patches.push_back({kcachestr,"/System/Library/Caches/com.apple.kernelcaches/kernelcachd" /*doubt_work*/,4}); //rewrite pointer to point to fsboot
+
+    return patches;
+}
+
 loc_t ibootpatchfinder64_iOS14::find_iBoot_logstr(uint64_t loghex, int skip, uint64_t shortdec){
     vmem iter(*_vmem);
     uint64_t longval = 0;
